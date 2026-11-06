@@ -62,6 +62,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .grid .th{font-family:var(--font-mono);font-size:13px;color:var(--ink);text-align:right;padding-right:6px;line-height:30px}
 .cell{height:30px;border-radius:4px;background:var(--bg);border:1px solid var(--line);font-family:var(--font-mono);font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;color:var(--ink);cursor:pointer}
 .mode-edit .cell.mine{background:var(--mine);border-color:var(--mine)}
+.cell.locked{background:repeating-linear-gradient(135deg,var(--surface) 0 6px,var(--bg) 6px 12px);border-style:dashed;cursor:not-allowed;color:var(--muted)}
+.mode-view .cell.locked{cursor:pointer}
 .mode-view .cell{cursor:pointer}
 .cell.c1{background:var(--h1)} .cell.c2{background:var(--h2)} .cell.c3{background:var(--h3)}
 .cell.c4{background:var(--h4);color:var(--h4-ink);border-color:var(--h4)}
@@ -79,6 +81,20 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .empty{color:var(--muted);font-size:16px;margin:0}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 .ghost{font:inherit;font-size:15px;background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:6px;padding:5px 10px;cursor:pointer}
+
+/* 휴대폰: 일요일까지 한 화면에 들어가도록 칸 폭을 줄입니다 */
+@media (max-width:520px){
+  .panel{padding:14px 10px}
+  .gridbox{overflow-x:visible}
+  .grid{grid-template-columns:24px repeat(7,minmax(0,1fr));gap:2px;min-width:0}
+  .grid .th{padding-right:3px;font-size:12px}
+  .grid .th .mm{display:none}
+  .grid .dh{font-size:15px}
+  .cell{height:34px;font-size:12px}
+  h1{font-size:25px}
+  .tabs{align-self:stretch}
+  .tabs button{flex:1;padding:8px 6px}
+}
 </style>
 </head>
 <body>
@@ -160,7 +176,7 @@ function buildGrid(){
   grid.appendChild(document.createElement("div"));
   DAYS.forEach((d,i)=>{const e=document.createElement("div");e.className="dh"+(i>4?" we":"");e.textContent=d;grid.appendChild(e)});
   HOURS.forEach(h=>{
-    const t=document.createElement("div");t.className="th";t.textContent=pad(h)+":00";grid.appendChild(t);
+    const t=document.createElement("div");t.className="th";const hb=document.createElement("span");hb.textContent=pad(h);const mm=document.createElement("span");mm.className="mm";mm.textContent=":00";t.append(hb,mm);grid.appendChild(t);
     DAYS.forEach((_,d)=>{
       const c=document.createElement("div");c.className="cell";c.dataset.slot=d+"-"+h;
       c.setAttribute("role","button");c.tabIndex=0;c.setAttribute("aria-label",label(d,h));
@@ -169,22 +185,31 @@ function buildGrid(){
   });
 }
 
+function slotsOf(key){return key===me?[...mySet]:(all[key]||[])}
+function mentorSet(){return new Set(slotsOf("mentor"))}
+function allowed(k){return me==="mentor"||mentorSet().has(k)}
 function counts(){
-  const m={};PEOPLE.forEach(p=>{const s=p.key===me?[...mySet]:(all[p.key]||[]);s.forEach(k=>{(m[k]=m[k]||[]).push(p.name)})});return m;
+  const ms=mentorSet(),m={};
+  PEOPLE.forEach(p=>{slotsOf(p.key).forEach(k=>{if(p.key!=="mentor"&&!ms.has(k))return;(m[k]=m[k]||[]).push(p.name)})});return m;
 }
 
 function renderGrid(){
   grid.className="grid mode-"+mode;
-  const m=counts();
+  const m=counts(),ms=mentorSet();
   for(const k in cells){
     const c=cells[k];c.className="cell";c.textContent="";
-    if(mode==="edit"){if(mySet.has(k))c.classList.add("mine");c.setAttribute("aria-pressed",String(mySet.has(k)))}
+    const open=me==="mentor"&&mode==="edit"?true:ms.has(k);
+    if(!open){c.classList.add("locked");c.setAttribute("aria-disabled","true")}else c.removeAttribute("aria-disabled");
+    if(mode==="edit"){const on=mySet.has(k)&&open;if(on)c.classList.add("mine");c.setAttribute("aria-pressed",String(on))}
     else{c.removeAttribute("aria-pressed");const n=(m[k]||[]).length;if(n){c.classList.add("c"+Math.min(n,4));c.textContent=n}if(k===selSlot)c.classList.add("sel")}
   }
   $("legend").hidden=mode!=="view";$("detail").hidden=mode!=="view";
-  $("clear").hidden=!(mode==="edit"&&me&&mySet.size);
+  $("clear").hidden=!(mode==="edit"&&me&&[...mySet].some(allowed));
   $("hint").textContent=mode==="edit"
-    ?(me?"칸을 누르거나 끌어서 칠하세요. 칠한 칸을 다시 누르면 지워집니다.":"먼저 위에서 이름을 골라 주세요.")
+    ?(!me?"먼저 위에서 이름을 골라 주세요."
+      :me==="mentor"?"멘토가 칠한 칸만 멘티가 고를 수 있습니다. 가능한 시간을 모두 칠해 주세요."
+      :ms.size?"멘토가 열어 둔 칸만 칠할 수 있습니다. 빗금 친 칸은 선택할 수 없어요."
+      :"멘토가 아직 가능한 시간을 입력하지 않았습니다. 잠시 후 다시 확인해 주세요.")
     :"숫자는 가능한 인원입니다. 칸을 누르면 누가 가능한지 보입니다.";
   if(mode==="view"){
     const d=$("detail");
@@ -197,7 +222,8 @@ function renderGrid(){
 function renderBest(){
   const ul=$("best");ul.textContent="";
   const m=counts();
-  const responded=PEOPLE.filter(p=>(p.key===me?mySet.size:(all[p.key]||[]).length)>0);
+  const ms=mentorSet();
+  const responded=PEOPLE.filter(p=>slotsOf(p.key).some(k=>p.key==="mentor"||ms.has(k)));
   if(!responded.length){const li=document.createElement("p");li.className="empty";li.textContent="아직 입력한 사람이 없습니다. 네 명이 모두 칠하면 전원 가능한 시간이 여기 표시됩니다.";ul.appendChild(li);return}
   const list=Object.entries(m).map(([k,names])=>{const[d,h]=k.split("-").map(Number);return{d,h,names}})
     .sort((a,b)=>b.names.length-a.names.length||a.d-b.d||a.h-b.h).slice(0,6);
@@ -222,11 +248,12 @@ $("tab-view").onclick=()=>setMode("view");
 
 /* painting */
 let painting=false,paintVal=true,changed=false;
-function paint(k){if(!k)return;const has=mySet.has(k);if(paintVal&&!has){mySet.add(k);changed=true}else if(!paintVal&&has){mySet.delete(k);changed=true}cells[k].classList.toggle("mine",mySet.has(k))}
+function paint(k){if(!k||!allowed(k))return;const has=mySet.has(k);if(paintVal&&!has){mySet.add(k);changed=true}else if(!paintVal&&has){mySet.delete(k);changed=true}cells[k].classList.toggle("mine",mySet.has(k))}
 grid.addEventListener("pointerdown",e=>{
   const c=e.target.closest(".cell");if(!c)return;
   if(mode==="view"){selSlot=c.dataset.slot;renderGrid();return}
   if(!me){setStatus("먼저 위에서 이름을 골라 주세요.","warn");return}
+  if(!allowed(c.dataset.slot)){setStatus("멘토가 열어 둔 시간만 고를 수 있어요.","warn");return}
   painting=true;paintVal=!mySet.has(c.dataset.slot);paint(c.dataset.slot);e.preventDefault();
 });
 grid.addEventListener("pointermove",e=>{if(!painting)return;const el=document.elementFromPoint(e.clientX,e.clientY);const c=el&&el.closest&&el.closest(".cell");if(c)paint(c.dataset.slot)});
@@ -234,7 +261,7 @@ window.addEventListener("pointerup",()=>{if(!painting)return;painting=false;if(c
 grid.addEventListener("keydown",e=>{
   if(e.key!=="Enter"&&e.key!==" ")return;const c=e.target.closest(".cell");if(!c)return;e.preventDefault();
   if(mode==="view"){selSlot=c.dataset.slot;renderGrid();return}
-  if(!me)return;paintVal=!mySet.has(c.dataset.slot);paint(c.dataset.slot);changed=false;renderGrid();renderBest();scheduleSave();
+  if(!me||!allowed(c.dataset.slot))return;paintVal=!mySet.has(c.dataset.slot);paint(c.dataset.slot);changed=false;renderGrid();renderBest();scheduleSave();
 });
 $("clear").onclick=()=>{mySet.clear();renderAll();scheduleSave()};
 
@@ -243,7 +270,7 @@ let saveTimer=null,saving=false,dirty=false;
 function scheduleSave(){dirty=true;setStatus("저장 중…");clearTimeout(saveTimer);saveTimer=setTimeout(flush,700)}
 async function flush(){
   if(saving||!dirty)return;saving=true;dirty=false;
-  const who=me,slots=[...mySet].sort();
+  const who=me,slots=[...mySet].filter(allowed).sort();
   try{
     const r=await fetch("/api/avail",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({who,slots})});
     const j=await r.json().catch(()=>({}));

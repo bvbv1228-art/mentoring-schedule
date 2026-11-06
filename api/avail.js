@@ -40,7 +40,14 @@ export default async function handler(req, res) {
       if (!Array.isArray(slots) || slots.length > 98 || !slots.every((s) => typeof s === "string" && SLOT.test(s))) {
         return res.status(400).json({ error: "invalid_slots" });
       }
-      const clean = [...new Set(slots)].sort();
+      let clean = [...new Set(slots)].sort();
+      if (who !== "mentor") {
+        // 멘티는 멘토가 열어 둔 시간만 저장할 수 있습니다.
+        let open = [];
+        try { open = JSON.parse((await redis(["HGET", KEY, "mentor"])) || "[]"); } catch {}
+        const openSet = new Set(open);
+        clean = clean.filter((s) => openSet.has(s));
+      }
       await redis(["HSET", KEY, who, JSON.stringify(clean)]);
       return res.status(200).json({ ok: true, slots: clean });
     }
