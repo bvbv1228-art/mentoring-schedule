@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>A그룹 멘토링 시간 조율</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://hangeul.pstatic.net/hangeul_static/css/nanum-square-round.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/innks/NanumSquareRound@master/nanumsquareround.min.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
 *,*::before,*::after{box-sizing:border-box}
 :root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
@@ -18,7 +20,7 @@ body{margin:0}
   --accent:#1f5f8b; --accent-ink:#ffffff; --mine:#2b7bb4;
   --h1:#e3eef6; --h2:#b9d5ea; --h3:#7fb0d6; --h4:#1f5f8b; --h4-ink:#ffffff;
   --ok:#1d7a4f; --warn:#9a5b12;
-  --font-body:"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-body:"NanumSquareRound", "NanumSquareRoundR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   --font-mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
@@ -125,7 +127,7 @@ const PEOPLE=[
   {key:"hyunggyu",name:"최형규",role:"데이터 분석"}
 ];
 const DAYS=["월","화","수","목","금","토","일"];
-const HOURS=[];for(let h=9;h<=21;h++)HOURS.push(h);
+const HOURS=[];for(let h=9;h<=22;h++)HOURS.push(h);
 const pad=n=>String(n).padStart(2,"0");
 const label=(d,h)=>`${DAYS[d]}요일 ${pad(h)}:00–${pad(h+1)}:00`;
 

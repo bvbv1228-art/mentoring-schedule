@@ -2,7 +2,7 @@
 // 저장소: Upstash Redis (Vercel Storage 탭에서 연결하면 환경변수가 자동으로 들어갑니다)
 
 const PEOPLE = ["mentor", "yuri", "yunsu", "hyunggyu"];
-const SLOT = /^[0-6]-(9|1[0-9]|2[01])$/; // 월(0)~일(6), 09~21시 시작 1시간 칸
+const SLOT = /^[0-6]-(9|1[0-9]|2[0-2])$/; // 월(0)~일(6), 09~22시 시작 1시간 칸 (마지막 칸 22~23시)
 const KEY = "mentoring:avail";
 
 const URL_ = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
       const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body || {};
       const { who, slots } = body;
       if (!PEOPLE.includes(who)) return res.status(400).json({ error: "unknown_person" });
-      if (!Array.isArray(slots) || slots.length > 91 || !slots.every((s) => typeof s === "string" && SLOT.test(s))) {
+      if (!Array.isArray(slots) || slots.length > 98 || !slots.every((s) => typeof s === "string" && SLOT.test(s))) {
         return res.status(400).json({ error: "invalid_slots" });
       }
       const clean = [...new Set(slots)].sort();
