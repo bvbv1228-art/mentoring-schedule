@@ -1,0 +1,6 @@
+{
+  "name": "a-group-mentoring-schedule",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=18" }
+}
