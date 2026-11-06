@@ -55,7 +55,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .status{font-size:16px;color:var(--muted);min-height:1.4em}
 .status.ok{color:var(--ok)} .status.warn{color:var(--warn)}
 .gridbox{overflow-x:auto}
-.grid{display:grid;grid-template-columns:46px repeat(7,minmax(38px,1fr));gap:3px;user-select:none;-webkit-user-select:none;touch-action:none;min-width:320px}
+.grid{display:grid;grid-template-columns:46px repeat(7,minmax(38px,1fr));gap:3px;user-select:none;-webkit-user-select:none;touch-action:pan-y;min-width:320px}
 .grid .dh{text-align:center;font-size:16px;font-weight:600;padding-bottom:4px}
 .grid .dh.we{color:var(--muted)}
 .lede{font-size:17px}
@@ -126,7 +126,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
     <p class="detail" id="detail" hidden></p>
     <div class="row">
       <div class="status" id="status" role="status">시간표를 불러오는 중입니다.</div>
-      <button class="ghost" id="clear" hidden>내 선택 모두 지우기</button>
+      <span style="display:inline-flex;gap:8px;flex-wrap:wrap"><button class="ghost" id="undo" hidden>방금 변경 되돌리기</button><button class="ghost" id="clear" hidden>내 선택 모두 지우기</button></span>
     </div>
   </section>
 
@@ -166,7 +166,7 @@ function renderPeople(){
     const n=document.createElement("span");n.textContent=p.name;
     const r=document.createElement("span");r.className="role";r.textContent=p.role;
     b.append(dot,n,r);
-    b.onclick=()=>{me=p.key;try{localStorage.setItem("mentor-who",me)}catch(e){}mySet=new Set(all[me]||[]);setMode("edit");renderAll()};
+    b.onclick=()=>{me=p.key;try{localStorage.setItem("mentor-who",me)}catch(e){}mySet=new Set(all[me]||[]);undoSet=null;$("undo").hidden=true;setMode("edit");renderAll()};
     box.appendChild(b);
   });
 }
@@ -207,7 +207,7 @@ function renderGrid(){
   $("clear").hidden=!(mode==="edit"&&me&&[...mySet].some(allowed));
   $("hint").textContent=mode==="edit"
     ?(!me?"먼저 위에서 이름을 골라 주세요."
-      :"칸을 누르거나 끌어서 칠하세요. 칠한 칸을 다시 누르면 지워집니다.")
+      :(matchMedia("(pointer: coarse)").matches?"칸을 한 번 탭하면 선택, 다시 탭하면 해제됩니다. 화면을 밀면 칠해지지 않아요.":"칸을 누르거나 끌어서 칠하세요. 칠한 칸을 다시 누르면 지워집니다."))
     :"숫자는 가능한 인원입니다. 칸을 누르면 누가 가능한지 보입니다.";
   if(mode==="view"){
     const d=$("detail");
@@ -244,24 +244,58 @@ function setMode(m){mode=m;$("tab-edit").setAttribute("aria-selected",String(m==
 $("tab-edit").onclick=()=>setMode("edit");
 $("tab-view").onclick=()=>setMode("view");
 
-/* painting */
-let painting=false,paintVal=true,changed=false;
+/* painting
+   - 마우스: 누르고 끌면 여러 칸을 한 번에 칠합니다.
+   - 터치: 화면을 밀어 스크롤할 때는 칠해지지 않고, 제자리에서 짧게 탭한 칸만 바뀝니다. */
+let painting=false,paintVal=true,changed=false,touch=null,undoSet=null,undoTimer=null;
 function paint(k){if(!k||!allowed(k))return;const has=mySet.has(k);if(paintVal&&!has){mySet.add(k);changed=true}else if(!paintVal&&has){mySet.delete(k);changed=true}cells[k].classList.toggle("mine",mySet.has(k))}
+function rememberUndo(){undoSet=new Set(mySet)}
+function commitChange(){
+  changed=false;renderGrid();renderBest();scheduleSave();
+  $("undo").hidden=!undoSet;clearTimeout(undoTimer);undoTimer=setTimeout(()=>{undoSet=null;$("undo").hidden=true},15000);
+}
+function canEdit(c){
+  if(!me){setStatus("먼저 위에서 이름을 골라 주세요.","warn");return false}
+  return allowed(c.dataset.slot);
+}
 grid.addEventListener("pointerdown",e=>{
   const c=e.target.closest(".cell");if(!c)return;
+  if(e.pointerType==="touch"){touch={x:e.clientX,y:e.clientY,t:Date.now(),slot:c.dataset.slot};return}
   if(mode==="view"){selSlot=c.dataset.slot;renderGrid();return}
-  if(!me){setStatus("먼저 위에서 이름을 골라 주세요.","warn");return}
-  if(!allowed(c.dataset.slot)){setStatus("멘토가 열어 둔 시간만 고를 수 있어요.","warn");return}
-  painting=true;paintVal=!mySet.has(c.dataset.slot);paint(c.dataset.slot);e.preventDefault();
+  if(!canEdit(c))return;
+  rememberUndo();painting=true;paintVal=!mySet.has(c.dataset.slot);paint(c.dataset.slot);e.preventDefault();
 });
-grid.addEventListener("pointermove",e=>{if(!painting)return;const el=document.elementFromPoint(e.clientX,e.clientY);const c=el&&el.closest&&el.closest(".cell");if(c)paint(c.dataset.slot)});
-window.addEventListener("pointerup",()=>{if(!painting)return;painting=false;if(changed){changed=false;renderGrid();renderBest();scheduleSave()}});
+grid.addEventListener("pointermove",e=>{
+  if(touch){if(Math.abs(e.clientX-touch.x)>8||Math.abs(e.clientY-touch.y)>8)touch=null;return}
+  if(!painting)return;const el=document.elementFromPoint(e.clientX,e.clientY);const c=el&&el.closest&&el.closest(".cell");if(c)paint(c.dataset.slot);
+});
+grid.addEventListener("pointercancel",()=>{touch=null});
+window.addEventListener("pointerup",e=>{
+  if(touch){
+    const t=touch;touch=null;
+    if(Date.now()-t.t>600)return; // 길게 누른 건 무시
+    const c=cells[t.slot];
+    if(mode==="view"){selSlot=t.slot;renderGrid();return}
+    if(!canEdit(c))return;
+    rememberUndo();paintVal=!mySet.has(t.slot);paint(t.slot);if(changed)commitChange();
+    return;
+  }
+  if(!painting)return;painting=false;if(changed)commitChange();
+});
 grid.addEventListener("keydown",e=>{
   if(e.key!=="Enter"&&e.key!==" ")return;const c=e.target.closest(".cell");if(!c)return;e.preventDefault();
   if(mode==="view"){selSlot=c.dataset.slot;renderGrid();return}
-  if(!me||!allowed(c.dataset.slot))return;paintVal=!mySet.has(c.dataset.slot);paint(c.dataset.slot);changed=false;renderGrid();renderBest();scheduleSave();
+  if(!canEdit(c))return;rememberUndo();paintVal=!mySet.has(c.dataset.slot);paint(c.dataset.slot);if(changed)commitChange();
 });
-$("clear").onclick=()=>{mySet.clear();renderAll();scheduleSave()};
+$("undo").onclick=()=>{if(!undoSet)return;mySet=new Set(undoSet);undoSet=null;$("undo").hidden=true;renderAll();scheduleSave();};
+let clearArmed=false,clearTimer=null;
+$("clear").onclick=()=>{
+  const b=$("clear");
+  if(!clearArmed){clearArmed=true;b.textContent="정말 지울까요? 한 번 더 누르기";clearTimeout(clearTimer);clearTimer=setTimeout(()=>{clearArmed=false;b.textContent="내 선택 모두 지우기"},4000);return}
+  clearArmed=false;clearTimeout(clearTimer);b.textContent="내 선택 모두 지우기";
+  rememberUndo();mySet.clear();renderAll();scheduleSave();$("undo").hidden=false;
+  clearTimeout(undoTimer);undoTimer=setTimeout(()=>{undoSet=null;$("undo").hidden=true},15000);
+};
 
 /* saving: one request at a time, coalesced */
 let saveTimer=null,saving=false,dirty=false;
